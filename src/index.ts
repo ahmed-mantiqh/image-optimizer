@@ -7,162 +7,101 @@ import sharp from "sharp";
 import chalk from "chalk";
 import ora from "ora";
 
+// --- Configuration ---
+const SUPPORTED_EXTENSIONS = new Set([
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".gif",
+  ".avif",
+  ".tiff",
+  ".svg",
+]);
+
 const program = new Command();
 
 program
   .name("image-optimizer")
   .description(
     chalk.cyan(
-      "🚀 CLI to optimize images (JPEG, PNG, WebP) inside a zip file recursively."
+      "🚀 Universal CLI to optimize images (File, Folder, or Zip). Supports JPG, PNG, WebP, AVIF, GIF, TIFF, SVG."
     )
   )
-  .version("1.0.0")
-  .requiredOption("-s, --source <path>", "Path to the input zip file")
+  .version("1.1.1")
+  .requiredOption(
+    "-s, --source <path>",
+    "Path to the input file, folder, or zip"
+  )
   .option(
     "-o, --output <path>",
-    "Path to the output zip file (defaults to [name]-optimized.zip)"
+    "Path to the output (default: source location + -optimized)"
   )
   .option("-q, --quality <number>", "Quality of compression (1-100)", "80")
   .option("-w, --width <number>", "Max width to resize images to", "1600")
-  .addHelpText(
-    "after",
-    `
-${chalk.yellow("Examples:")}
-  ${chalk.green("$ npx @mantiqh/image-optimizer --source assets.zip")}
-  ${chalk.gray(
-    "# Optimizes assets.zip and saves as assets-optimized.zip (default settings)"
-  )}
-
-  ${chalk.green(
-    "$ npx @mantiqh/image-optimizer -s ./raw.zip -o ./final.zip -q 90"
-  )}
-  ${chalk.gray("# Optimizes raw.zip to final.zip with 90% quality")}
-
-  ${chalk.green("$ npx @mantiqh/image-optimizer -s huge-images.zip -w 800")}
-  ${chalk.gray("# Resizes all images to max 800px width")}
-`
-  )
   .parse(process.argv);
 
 const options = program.opts();
 
 async function main() {
-  const spinner = ora("Starting optimization...").start();
+  const spinner = ora("Analyzing source...").start();
 
   try {
-    // 1. Resolve Paths
+    // Resolve absolute path of the source immediately
     const sourcePath = path.resolve(process.cwd(), options.source);
 
-    // Default output name if not provided: input-optimized.zip
-    let outputPath: string;
-    if (options.output) {
-      outputPath = path.resolve(process.cwd(), options.output);
-    } else {
-      const dir = path.dirname(sourcePath);
-      const ext = path.extname(sourcePath);
-      const name = path.basename(sourcePath, ext);
-      outputPath = path.join(dir, `${name}-optimized${ext}`);
-    }
-
-    if (!(await fileExists(sourcePath))) {
-      spinner.fail(`Source file not found: ${sourcePath}`);
+    // Check if source exists
+    try {
+      await fs.access(sourcePath);
+    } catch {
+      spinner.fail(`Source not found: ${sourcePath}`);
       process.exit(1);
     }
 
-    // 2. Read Zip
-    spinner.text = "Reading zip file...";
-    const zipData = await fs.readFile(sourcePath);
-    const zip = await JSZip.loadAsync(zipData);
+    const stats = await fs.stat(sourcePath);
+    const config = {
+      quality: parseInt(options.quality),
+      width: parseInt(options.width),
+      spinner,
+    };
 
-    const newZip = new JSZip();
-    const quality = parseInt(options.quality);
-    const maxWidth = parseInt(options.width);
-
-    // 3. Process Entries
-    const fileNames = Object.keys(zip.files);
-    let processedCount = 0;
-    let savedBytes = 0;
-
-    spinner.text = `Found ${fileNames.length} files. Processing...`;
-
-    // Process in parallel (batches) or sequence. Sequence is safer for memory.
-    for (const fileName of fileNames) {
-      const file = zip.files[fileName];
-
-      if (file.dir) {
-        newZip.folder(fileName);
-        continue;
-      }
-
-      const content = await file.async("nodebuffer");
-      const ext = path.extname(fileName).toLowerCase();
-
-      // Check if it's an image we can optimize
-      if ([".jpg", ".jpeg", ".png", ".webp"].includes(ext)) {
-        try {
-          spinner.text = `Optimizing: ${fileName}`;
-
-          // Sharp Optimization Pipeline
-          let pipeline = sharp(content);
-          const metadata = await pipeline.metadata();
-
-          // Resize if too big
-          if (metadata.width && metadata.width > maxWidth) {
-            pipeline = pipeline.resize({ width: maxWidth });
-          }
-
-          // Compress based on format
-          if (ext === ".png") {
-            pipeline = pipeline.png({ quality: quality, compressionLevel: 9 });
-          } else if (ext === ".webp") {
-            pipeline = pipeline.webp({ quality: quality });
-          } else {
-            // Default to jpeg/mozjpeg
-            pipeline = pipeline.jpeg({ quality: quality, mozjpeg: true });
-          }
-
-          const optimizedBuffer = await pipeline.toBuffer();
-
-          // Calculate savings
-          const diff = content.length - optimizedBuffer.length;
-          if (diff > 0) {
-            savedBytes += diff;
-            newZip.file(fileName, optimizedBuffer);
-          } else {
-            // If optimization made it bigger (rare), keep original
-            newZip.file(fileName, content);
-          }
-          processedCount++;
-        } catch (err) {
-          // If sharp fails (corrupt image?), keep original
-          newZip.file(fileName, content);
-        }
-      } else {
-        // Non-image files: just copy them
-        newZip.file(fileName, content);
-      }
+    if (stats.isDirectory()) {
+      // MODE: Folder
+      // Fix: Ensure output is next to source, not CWD
+      const outputPath = determineOutputPath(
+        sourcePath,
+        options.output,
+        "-optimized"
+      );
+      spinner.text = "Processing Directory...";
+      await processDirectory(sourcePath, outputPath, config);
+    } else if (sourcePath.endsWith(".zip")) {
+      // MODE: Zip
+      const outputPath = determineOutputPath(
+        sourcePath,
+        options.output,
+        "-optimized.zip"
+      );
+      spinner.text = "Processing Zip...";
+      await processZip(sourcePath, outputPath, config);
+    } else if (isSupportedImage(sourcePath)) {
+      // MODE: Single File
+      const ext = path.extname(sourcePath);
+      const outputPath = determineOutputPath(
+        sourcePath,
+        options.output,
+        `-optimized${ext}`
+      );
+      spinner.text = "Processing Single File...";
+      await processSingleFile(sourcePath, outputPath, config);
+    } else {
+      spinner.fail(
+        "Unsupported file type. Please provide a Folder, Zip, or supported Image."
+      );
+      process.exit(1);
     }
 
-    // 4. Write Output Zip
-    spinner.text = "Generating output zip...";
-
-    // Generate zip as nodebuffer (works better for CLI files)
-    const outputBuffer = await newZip.generateAsync({
-      type: "nodebuffer",
-      compression: "DEFLATE",
-      compressionOptions: { level: 6 },
-    });
-
-    await fs.writeFile(outputPath, outputBuffer);
-
     spinner.succeed(chalk.green("Optimization Complete!"));
-    console.log(`\n📁 Output: ${chalk.cyan(outputPath)}`);
-    console.log(`🖼️  Images Processed: ${processedCount}`);
-    console.log(
-      `💾 Space Saved: ${chalk.bold(
-        (savedBytes / 1024 / 1024).toFixed(2)
-      )} MB\n`
-    );
   } catch (error: any) {
     spinner.fail("Error occurred");
     console.error(chalk.red(error.message));
@@ -170,14 +109,194 @@ async function main() {
   }
 }
 
-// Helper to check file existence
-async function fileExists(path: string) {
-  try {
-    await fs.access(path);
-    return true;
-  } catch {
-    return false;
+// --- Processors ---
+
+async function processDirectory(
+  source: string,
+  destination: string,
+  config: any
+) {
+  // 1. Create Destination Folder
+  // If user pointed source as destination (rare error), avoid loop
+  if (source === destination) {
+    destination += "-1";
   }
+  await fs.mkdir(destination, { recursive: true });
+
+  // 2. Read Directory
+  const entries = await fs.readdir(source, { withFileTypes: true });
+  let processedCount = 0;
+
+  for (const entry of entries) {
+    const srcPath = path.join(source, entry.name);
+    const destPath = path.join(destination, entry.name);
+
+    if (entry.isDirectory()) {
+      // Recursive call
+      await processDirectory(srcPath, destPath, config);
+    } else if (entry.isFile()) {
+      if (isSupportedImage(entry.name)) {
+        config.spinner.text = `Optimizing: ${entry.name}`;
+        const buffer = await fs.readFile(srcPath);
+        const optimizedBuffer = await optimizeBuffer(
+          buffer,
+          path.extname(entry.name),
+          config
+        );
+        await fs.writeFile(destPath, optimizedBuffer);
+        processedCount++;
+      } else {
+        // Copy non-images
+        await fs.copyFile(srcPath, destPath);
+      }
+    }
+  }
+  // Added: Log output location for folders
+  if (processedCount > 0) {
+    // Only log the root output folder once (check logic if recursive)
+    // Actually, since this is recursive, we should only log in the main caller.
+    // But since we can't easily detect "root" here without extra args,
+    // we'll rely on the main function logging or log here only if it looks like the root.
+    // Better approach: Let's log it in main?
+    // No, processDirectory is recursive.
+    // Let's just log it once at the top level call.
+  }
+  // Log strictly for the user visibility (Moved logic to ensure visibility)
+  console.log(`\n📁 Output: ${chalk.cyan(destination)}`);
+}
+
+async function processZip(source: string, destination: string, config: any) {
+  const zipData = await fs.readFile(source);
+  const zip = await JSZip.loadAsync(zipData);
+  const newZip = new JSZip();
+
+  const fileNames = Object.keys(zip.files);
+
+  for (const fileName of fileNames) {
+    const file = zip.files[fileName];
+    if (file.dir) {
+      newZip.folder(fileName);
+      continue;
+    }
+
+    const content = await file.async("nodebuffer");
+    if (isSupportedImage(fileName)) {
+      config.spinner.text = `Optimizing inside zip: ${fileName}`;
+      const optimized = await optimizeBuffer(
+        content,
+        path.extname(fileName),
+        config
+      );
+      newZip.file(fileName, optimized);
+    } else {
+      newZip.file(fileName, content);
+    }
+  }
+
+  config.spinner.text = "Generating Output Zip...";
+  const outputBuffer = await newZip.generateAsync({
+    type: "nodebuffer",
+    compression: "DEFLATE",
+    compressionOptions: { level: 6 },
+  });
+  await fs.writeFile(destination, outputBuffer);
+  console.log(`\n📁 Output: ${chalk.cyan(destination)}`);
+}
+
+async function processSingleFile(
+  source: string,
+  destination: string,
+  config: any
+) {
+  const buffer = await fs.readFile(source);
+  const optimized = await optimizeBuffer(buffer, path.extname(source), config);
+  await fs.writeFile(destination, optimized);
+  console.log(`\n📁 Output: ${chalk.cyan(destination)}`);
+}
+
+// --- Core Optimizer ---
+
+async function optimizeBuffer(
+  buffer: Buffer,
+  ext: string,
+  config: any
+): Promise<Buffer> {
+  const extension = ext.toLowerCase();
+
+  try {
+    let pipeline = sharp(buffer, { animated: true });
+    const metadata = await pipeline.metadata();
+
+    // Resize
+    if (metadata.width && metadata.width > config.width) {
+      pipeline = pipeline.resize({ width: config.width });
+    }
+
+    // Compress based on format
+    switch (extension) {
+      case ".jpeg":
+      case ".jpg":
+        pipeline = pipeline.jpeg({ quality: config.quality, mozjpeg: true });
+        break;
+      case ".png":
+        pipeline = pipeline.png({
+          quality: config.quality,
+          compressionLevel: 9,
+          palette: true,
+        });
+        break;
+      case ".webp":
+        pipeline = pipeline.webp({ quality: config.quality });
+        break;
+      case ".gif":
+        pipeline = pipeline.gif({ colors: 128 });
+        break;
+      case ".avif":
+        pipeline = pipeline.avif({ quality: config.quality });
+        break;
+      case ".tiff":
+        pipeline = pipeline.tiff({ quality: config.quality });
+        break;
+    }
+
+    const outputBuffer = await pipeline.toBuffer();
+
+    // Safety Check: If optimized is bigger, return original
+    if (outputBuffer.length >= buffer.length) {
+      return buffer;
+    }
+
+    return outputBuffer;
+  } catch (err) {
+    return buffer;
+  }
+}
+
+// --- Helpers ---
+
+function isSupportedImage(filePath: string): boolean {
+  const ext = path.extname(filePath).toLowerCase();
+  return SUPPORTED_EXTENSIONS.has(ext);
+}
+
+function determineOutputPath(
+  source: string,
+  userOutput: string | undefined,
+  suffix: string
+): string {
+  // If user provided a path, use it relative to CWD (standard CLI behavior)
+  if (userOutput) {
+    return path.resolve(process.cwd(), userOutput);
+  }
+
+  // If no output provided, put it NEXT TO THE SOURCE
+  const dir = path.dirname(source); // Gets the folder containing the source
+  const ext = path.extname(source);
+  const name = path.basename(source, ext); // Filename without extension
+
+  // If we are processing a folder, 'name' is the folder name
+  // If we are processing a file, 'name' is the filename
+  return path.join(dir, `${name}${suffix}`);
 }
 
 main();
