@@ -115,7 +115,3 @@ npx @mantiqh/image-optimizer -s ./raw-photos -o ./website-ready -q 90
     ```bash
     pnpm build
     ```
-
-## 📄 License
-
-ISC
