@@ -32,7 +32,7 @@ program
       "🚀 Universal CLI to optimize images (File, Folder, or Zip). Supports JPG, PNG, WebP, AVIF, GIF, TIFF, SVG."
     )
   )
-  .version("1.2.0")
+  .version("1.2.1")
   .requiredOption(
     "-s, --source <path>",
     "Path to the input file, folder, or zip"
