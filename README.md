@@ -9,7 +9,9 @@ Built for developers to quickly reduce asset sizes before deployment without com
 
 - **Universal Input:** Works on `.zip` files, local folders, or single images.
 - **Recursive:** Process entire directory trees; copies non-image files (CSS, JS) unchanged.
-- **Expanded Support:** Optimizes `JPG`, `PNG`, `WebP`, `AVIF`, `GIF`, `TIFF`, and `SVG`.
+- **Expanded Support:** Optimizes `JPG`, `PNG`, `WebP`, `AVIF`, `GIF`, `TIFF`. SVGs are skipped (copied as-is).
+- **Fast:** Parallel processing — optimizes up to 5 images concurrently per directory.
+- **Progress Tracking:** Shows `[N/total]` progress while optimizing.
 - **Smart Output:** Creates optimized versions _next to_ your source files by default.
 - **Safe:** If an optimized image is larger than the original, it keeps the original.
 

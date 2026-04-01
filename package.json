@@ -1,6 +1,6 @@
 {
   "name": "@mantiqh/image-optimizer",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "CLI to optimize images.",
   "main": "dist/index.js",
   "bin": {
@@ -11,7 +11,8 @@
     "build": "tsup src/index.ts --format esm --clean",
     "dev": "tsup src/index.ts --format esm --watch --onSuccess \"node dist/index.js\"",
     "start": "node dist/index.js",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "pnpm build",
+    "deploy": "bash scripts/deploy.sh"
   },
   "keywords": [],
   "author": "Muqtadir A.",
