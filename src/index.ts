@@ -7,6 +7,10 @@ import sharp from "sharp";
 import chalk from "chalk";
 import ora from "ora";
 
+function logOutputPath(outputPath: string): void {
+  console.log(`\n📁 Output: ${chalk.cyan(outputPath)}`);
+}
+
 // --- Configuration ---
 const SUPPORTED_EXTENSIONS = new Set([
   ".jpg",
@@ -75,6 +79,7 @@ async function main() {
       );
       spinner.text = "Processing Directory...";
       await processDirectory(sourcePath, outputPath, config);
+      logOutputPath(outputPath); // Log the output path after processing
     } else if (sourcePath.endsWith(".zip")) {
       // MODE: Zip
       const outputPath = determineOutputPath(
@@ -84,6 +89,7 @@ async function main() {
       );
       spinner.text = "Processing Zip...";
       await processZip(sourcePath, outputPath, config);
+      logOutputPath(outputPath); // Log the output path after processing
     } else if (isSupportedImage(sourcePath)) {
       // MODE: Single File
       const ext = path.extname(sourcePath);
@@ -94,6 +100,7 @@ async function main() {
       );
       spinner.text = "Processing Single File...";
       await processSingleFile(sourcePath, outputPath, config);
+      logOutputPath(outputPath); // Log the output path after processing
     } else {
       spinner.fail(
         "Unsupported file type. Please provide a Folder, Zip, or supported Image."
@@ -115,54 +122,55 @@ async function processDirectory(
   source: string,
   destination: string,
   config: any
-) {
-  // 1. Create Destination Folder
-  // If user pointed source as destination (rare error), avoid loop
+): Promise<number> {
   if (source === destination) {
     destination += "-1";
   }
   await fs.mkdir(destination, { recursive: true });
 
-  // 2. Read Directory
   const entries = await fs.readdir(source, { withFileTypes: true });
+
+  const dirEntries = entries.filter(e => e.isDirectory());
+  const imageEntries = entries.filter(e => e.isFile() && isSupportedImage(e.name) && path.extname(e.name).toLowerCase() !== ".svg");
+  const nonImageEntries = entries.filter(e => e.isFile() && (!isSupportedImage(e.name) || path.extname(e.name).toLowerCase() === ".svg"));
+
+  // Process directories sequentially (recursive)
+  for (const entry of dirEntries) {
+    await processDirectory(path.join(source, entry.name), path.join(destination, entry.name), config);
+  }
+
+  // Process images in parallel batches of 5
   let processedCount = 0;
+  const batchSize = 5;
+  const totalImages = imageEntries.length;
 
-  for (const entry of entries) {
-    const srcPath = path.join(source, entry.name);
-    const destPath = path.join(destination, entry.name);
-
-    if (entry.isDirectory()) {
-      // Recursive call
-      await processDirectory(srcPath, destPath, config);
-    } else if (entry.isFile()) {
-      if (isSupportedImage(entry.name)) {
-        config.spinner.text = `Optimizing: ${entry.name}`;
+  for (let i = 0; i < imageEntries.length; i += batchSize) {
+    const batch = imageEntries.slice(i, Math.min(i + batchSize, imageEntries.length));
+    const results = await Promise.all(batch.map(async (entry, j) => {
+      const srcPath = path.join(source, entry.name);
+      const destPath = path.join(destination, entry.name);
+      const num = i + j + 1;
+      config.spinner.text = `Optimizing [${num}/${totalImages}]: ${entry.name}`;
+      try {
         const buffer = await fs.readFile(srcPath);
-        const optimizedBuffer = await optimizeBuffer(
-          buffer,
-          path.extname(entry.name),
-          config
-        );
+        const optimizedBuffer = await optimizeBuffer(buffer, path.extname(entry.name), config);
         await fs.writeFile(destPath, optimizedBuffer);
-        processedCount++;
-      } else {
-        // Copy non-images
+        return 1;
+      } catch (error: any) {
+        console.error(chalk.red(`Failed to optimize ${entry.name}: ${error.message}`));
         await fs.copyFile(srcPath, destPath);
+        return 1;
       }
-    }
+    }));
+    processedCount += results.length;
   }
-  // Added: Log output location for folders
-  if (processedCount > 0) {
-    // Only log the root output folder once (check logic if recursive)
-    // Actually, since this is recursive, we should only log in the main caller.
-    // But since we can't easily detect "root" here without extra args,
-    // we'll rely on the main function logging or log here only if it looks like the root.
-    // Better approach: Let's log it in main?
-    // No, processDirectory is recursive.
-    // Let's just log it once at the top level call.
-  }
-  // Log strictly for the user visibility (Moved logic to ensure visibility)
-  console.log(`\n📁 Output: ${chalk.cyan(destination)}`);
+
+  // Copy non-image files in parallel
+  await Promise.all(nonImageEntries.map(entry => {
+    return fs.copyFile(path.join(source, entry.name), path.join(destination, entry.name));
+  }));
+
+  return processedCount;
 }
 
 async function processZip(source: string, destination: string, config: any) {
@@ -171,6 +179,9 @@ async function processZip(source: string, destination: string, config: any) {
   const newZip = new JSZip();
 
   const fileNames = Object.keys(zip.files);
+  const imageFiles = fileNames.filter(f => !zip.files[f].dir && isSupportedImage(f) && path.extname(f).toLowerCase() !== ".svg");
+  const totalImages = imageFiles.length;
+  let imageIndex = 0;
 
   for (const fileName of fileNames) {
     const file = zip.files[fileName];
@@ -180,14 +191,20 @@ async function processZip(source: string, destination: string, config: any) {
     }
 
     const content = await file.async("nodebuffer");
-    if (isSupportedImage(fileName)) {
-      config.spinner.text = `Optimizing inside zip: ${fileName}`;
-      const optimized = await optimizeBuffer(
-        content,
-        path.extname(fileName),
-        config
-      );
-      newZip.file(fileName, optimized);
+    const ext = path.extname(fileName).toLowerCase();
+
+    if (ext === ".svg") {
+      newZip.file(fileName, content);
+    } else if (isSupportedImage(fileName)) {
+      imageIndex++;
+      config.spinner.text = `Optimizing in zip [${imageIndex}/${totalImages}]: ${fileName}`;
+      try {
+        const optimized = await optimizeBuffer(content, path.extname(fileName), config);
+        newZip.file(fileName, optimized);
+      } catch (error: any) {
+        console.error(chalk.red(`Failed to optimize ${fileName}: ${error.message}`));
+        newZip.file(fileName, content);
+      }
     } else {
       newZip.file(fileName, content);
     }
@@ -200,7 +217,6 @@ async function processZip(source: string, destination: string, config: any) {
     compressionOptions: { level: 6 },
   });
   await fs.writeFile(destination, outputBuffer);
-  console.log(`\n📁 Output: ${chalk.cyan(destination)}`);
 }
 
 async function processSingleFile(
@@ -211,7 +227,6 @@ async function processSingleFile(
   const buffer = await fs.readFile(source);
   const optimized = await optimizeBuffer(buffer, path.extname(source), config);
   await fs.writeFile(destination, optimized);
-  console.log(`\n📁 Output: ${chalk.cyan(destination)}`);
 }
 
 // --- Core Optimizer ---
@@ -234,6 +249,8 @@ async function optimizeBuffer(
 
     // Compress based on format
     switch (extension) {
+      case ".svg":
+        return buffer;
       case ".jpeg":
       case ".jpg":
         pipeline = pipeline.jpeg({ quality: config.quality, mozjpeg: true });
