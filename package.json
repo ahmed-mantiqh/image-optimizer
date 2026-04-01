@@ -2,19 +2,45 @@
   "name": "@mantiqh/image-optimizer",
   "version": "1.2.1",
   "description": "CLI to optimize images.",
+  "type": "module",
   "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
   "bin": {
     "image-optimizer": "./dist/index.js"
   },
-  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "image",
+    "optimizer",
+    "compress",
+    "resize",
+    "sharp",
+    "cli",
+    "png",
+    "jpg",
+    "webp",
+    "avif"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format esm --clean",
     "dev": "tsup src/index.ts --format esm --watch --onSuccess \"node dist/index.js\"",
     "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/ tests/",
+    "lint:fix": "eslint src/ tests/ --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "prepublishOnly": "pnpm build",
-    "deploy": "bash scripts/deploy.sh"
+    "release": "np"
   },
-  "keywords": [],
   "author": "Muqtadir A.",
   "license": "MIT",
   "packageManager": "pnpm@10.12.3",
@@ -26,10 +52,16 @@
     "sharp": "^0.34.5"
   },
   "devDependencies": {
-    "@types/jszip": "^3.4.1",
+    "@eslint/js": "^9.0.0",
     "@types/node": "^25.0.3",
-    "@types/sharp": "^0.32.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.0.0",
+    "eslint-plugin-prettier": "^5.0.0",
+    "np": "^10.0.0",
+    "prettier": "^3.0.0",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^3.0.0"
   }
 }

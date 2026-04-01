@@ -3,7 +3,7 @@
 ## Project Overview
 
 TypeScript CLI tool for image optimization (files, folders, zip archives).
-Single source file: `src/index.ts`. Built with `tsup`, uses `pnpm`.
+Modular source in `src/`. Built with `tsup`, uses `pnpm`.
 
 ## Commands
 
@@ -11,25 +11,38 @@ Single source file: `src/index.ts`. Built with `tsup`, uses `pnpm`.
 pnpm build          # tsup build → dist/index.js (ESM)
 pnpm dev            # watch mode, auto-runs on change
 pnpm start          # run built output
+pnpm test           # vitest run
+pnpm lint           # eslint src/ tests/
+pnpm format         # prettier --write src/ tests/
+pnpm release        # np (publish + version bump)
 pnpm build && pnpm start -- -s <path>  # build + run against a path
 ```
 
-No test framework, linter, or formatter configured. No `pnpm test` or `pnpm lint`.
-
 ## Testing
 
-No automated tests exist. To verify changes, build and run manually:
+Vitest with real PNG/JPG/WebP fixtures in `tests/fixtures/`.
 
 ```bash
-pnpm build && node dist/index.js -s ./test-images
+pnpm test                    # run all tests
+pnpm test:watch              # watch mode
+pnpm build && node dist/index.js -s ./test-images  # manual test
 ```
 
 ## Project Structure
 
 ```
-src/index.ts        # entire application (~314 lines)
-dist/index.js       # built output (ESM bundle)
-test-images/        # manual test assets
+src/
+  index.ts           # entry point, re-exports
+  cli.ts             # CLI setup (commander), main()
+  constants.ts       # SUPPORTED_EXTENSIONS
+  helpers.ts         # isSupportedImage, determineOutputPath, logOutputPath
+  optimizer.ts       # optimizeBuffer (sharp pipeline)
+  processors.ts      # processDirectory, processZip, processSingleFile
+dist/index.js        # built output (ESM bundle)
+tests/
+  fixtures/          # tiny PNG/JPG/WebP test images
+  helpers.test.ts    # helper function tests
+  optimize.test.ts   # optimizeBuffer tests
 ```
 
 ## Code Style
@@ -37,7 +50,8 @@ test-images/        # manual test assets
 ### Formatting
 - 2-space indentation
 - Double quotes for strings
-- No trailing semicolons (inconsistent in codebase, but prefer omitting)
+- No trailing semicolons
+- Enforced by Prettier + ESLint
 
 ### Imports
 - ESM `import` syntax only (`"type": "module"` in package.json)
@@ -45,9 +59,9 @@ test-images/        # manual test assets
 - No `import *` — use named/default imports
 
 ```ts
-import { Command } from "commander";
-import fs from "fs/promises";
-import path from "path";
+import { Command } from "commander"
+import fs from "fs/promises"
+import path from "path"
 ```
 
 ### Naming
@@ -76,10 +90,12 @@ import path from "path";
 - No JSDoc
 
 ### Architecture Pattern
-- `main()` — entry point, CLI setup via `commander`, dispatches to processors
-- `processDirectory()` / `processZip()` / `processSingleFile()` — mode-specific handlers
-- `optimizeBuffer()` — core sharp-based optimization, returns original on failure
-- `isSupportedImage()` / `determineOutputPath()` — helpers
+- `cli.ts:main()` — entry point, CLI setup via `commander`, dispatches to processors
+- `processors.ts` — `processDirectory()` / `processZip()` / `processSingleFile()` — mode-specific handlers
+- `optimizer.ts` — `optimizeBuffer()` — core sharp-based optimization, returns original on failure
+- `helpers.ts` — `isSupportedImage()` / `determineOutputPath()` / `logOutputPath()`
+- `constants.ts` — `SUPPORTED_EXTENSIONS` set
+- `index.ts` — re-exports for library use, runs CLI when executed directly
 
 ## Dependencies
 
@@ -89,12 +105,19 @@ import path from "path";
 - **ora** — spinner/progress
 - **jszip** — zip file handling
 
+### Dev Dependencies
+- **vitest** — test runner
+- **eslint** + **typescript-eslint** — linting
+- **prettier** — formatting
+- **np** — release management
+- **tsup** — bundling
+
 ## Key Config
 
 - **tsconfig**: ES2022 target, NodeNext module resolution, strict mode
 - **package manager**: pnpm 10.12.3
 - **module type**: ESM (`"type": "module"`)
-- **Node version**: ES2022 compatible (Node 18+)
+- **Node version**: ES2022 compatible (Node 18+, see `.nvmrc`)
 
 ## Gotchas
 
@@ -102,3 +125,5 @@ import path from "path";
 - If optimized output is larger than input, original is returned
 - Directory output appends `-1` if source === destination (loop prevention)
 - `optimizeBuffer` silently catches all errors — don't add throw/rethrow without checking callers
+- Version is read from `package.json` at runtime via `createRequire` — no hardcoded versions
+- CLI only runs when executed directly (guarded by `import.meta.url` check in `index.ts`)
