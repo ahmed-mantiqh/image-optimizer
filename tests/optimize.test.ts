@@ -47,7 +47,11 @@ describe("optimizeBuffer", () => {
   it("optimizes a GIF", async () => {
     const input = await makeImage(10, 10, "png")
     const gifBuf = await sharp(input).gif().toBuffer()
-    const result = await optimizeBuffer(gifBuf, ".gif", { quality: 80, width: 1600, spinner: { text: "" } })
+    const result = await optimizeBuffer(gifBuf, ".gif", {
+      quality: 80,
+      width: 1600,
+      spinner: { text: "" },
+    })
     expect(Buffer.isBuffer(result)).toBe(true)
     expect(result.length).toBeGreaterThan(0)
   })
@@ -93,21 +97,33 @@ describe("optimizeBuffer", () => {
   it("returns original if optimized is larger", async () => {
     // tiny image where compression can't help — original returned
     const input = await makeImage(2, 2)
-    const result = await optimizeBuffer(input, ".png", { quality: 1, width: 1600, spinner: { text: "" } })
+    const result = await optimizeBuffer(input, ".png", {
+      quality: 1,
+      width: 1600,
+      spinner: { text: "" },
+    })
     expect(Buffer.isBuffer(result)).toBe(true)
     expect(result.length).toBeGreaterThan(0)
   })
 
   it("resizes when image exceeds max width", async () => {
     const wideImage = await makeImage(3000, 100)
-    const result = await optimizeBuffer(wideImage, ".png", { quality: 80, width: 100, spinner: { text: "" } })
+    const result = await optimizeBuffer(wideImage, ".png", {
+      quality: 80,
+      width: 100,
+      spinner: { text: "" },
+    })
     const metadata = await sharp(result).metadata()
     expect(metadata.width).toBe(100)
   })
 
   it("does not resize when image is within max width", async () => {
     const input = await makeImage(100, 100)
-    const result = await optimizeBuffer(input, ".png", { quality: 80, width: 1600, spinner: { text: "" } })
+    const result = await optimizeBuffer(input, ".png", {
+      quality: 80,
+      width: 1600,
+      spinner: { text: "" },
+    })
     const metadata = await sharp(result).metadata()
     expect(metadata.width).toBe(100)
   })
