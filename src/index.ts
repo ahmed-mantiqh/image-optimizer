@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 export { optimizeBuffer } from "./optimizer.js"
-export { isSupportedImage, determineOutputPath } from "./helpers.js"
+export { isSupportedImage, determineOutputPath, logOutputPath } from "./helpers.js"
 export { processDirectory, processZip, processSingleFile } from "./processors.js"
 
 import { main } from "./cli.js"

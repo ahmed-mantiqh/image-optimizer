@@ -28,7 +28,7 @@ jobs:
 
       - run: pnpm build
 
-      - run: pnpm test
+      - run: pnpm test:coverage
 
       - run: pnpm lint
 
