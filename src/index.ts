@@ -5,8 +5,9 @@ export { processDirectory, processZip, processSingleFile } from "./processors.js
 
 import { main } from "./cli.js"
 import { fileURLToPath } from "node:url"
+import { realpathSync } from "node:fs"
 
-const isDirectRun = process.argv[1] === fileURLToPath(import.meta.url)
+const isDirectRun = realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)
 if (isDirectRun) {
   main()
 }
