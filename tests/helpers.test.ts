@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest"
-import { isSupportedImage, determineOutputPath } from "../src/index.js"
+import { describe, it, expect, vi, afterEach } from "vitest"
+import { isSupportedImage, determineOutputPath, logOutputPath } from "../src/index.js"
 import path from "path"
 
 describe("isSupportedImage", () => {
@@ -40,5 +40,19 @@ describe("determineOutputPath", () => {
   it("handles directory source", () => {
     const result = determineOutputPath("/photos/mydir", undefined, "-optimized")
     expect(result).toBe("/photos/mydir-optimized")
+  })
+})
+
+describe("logOutputPath", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("logs the output path to console", () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {})
+    logOutputPath("/some/output/path")
+    expect(spy).toHaveBeenCalledOnce()
+    const logged = spy.mock.calls[0][0] as string
+    expect(logged).toContain("/some/output/path")
   })
 })
