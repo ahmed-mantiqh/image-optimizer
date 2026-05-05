@@ -41,18 +41,26 @@ export async function main() {
     }
 
     const stats = await fs.stat(sourcePath)
-    const config = {
-      quality: parseInt(options.quality),
-      width: parseInt(options.width),
-      spinner,
+    const quality = parseInt(options.quality)
+    const width = parseInt(options.width)
+
+    if (quality < 1 || quality > 100) {
+      spinner.fail("Quality must be between 1 and 100")
+      process.exit(1)
     }
+    if (width < 1) {
+      spinner.fail("Width must be a positive number")
+      process.exit(1)
+    }
+
+    const config = { quality, width, spinner }
 
     if (stats.isDirectory()) {
       const outputPath = determineOutputPath(sourcePath, options.output, "-optimized")
       spinner.text = "Processing Directory..."
       await processDirectory(sourcePath, outputPath, config)
       logOutputPath(outputPath)
-    } else if (sourcePath.endsWith(".zip")) {
+    } else if (sourcePath.toLowerCase().endsWith(".zip")) {
       const outputPath = determineOutputPath(sourcePath, options.output, "-optimized.zip")
       spinner.text = "Processing Zip..."
       await processZip(sourcePath, outputPath, config)

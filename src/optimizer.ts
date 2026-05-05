@@ -29,7 +29,7 @@ export async function optimizeBuffer(buffer: Buffer, ext: string, config: any): 
         pipeline = pipeline.webp({ quality: config.quality })
         break
       case ".gif":
-        pipeline = pipeline.gif({ colors: 128 })
+        pipeline = pipeline.gif({ colors: Math.round((config.quality / 100) * 256) })
         break
       case ".avif":
         pipeline = pipeline.avif({ quality: config.quality })
