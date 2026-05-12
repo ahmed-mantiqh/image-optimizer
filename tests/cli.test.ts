@@ -58,7 +58,7 @@ describe("main() — validation", () => {
     mockStat.mockResolvedValue(makeStatResult(false))
     await main()
     expect(mockExit).toHaveBeenCalledWith(1)
-    expect(spinner.fail).toHaveBeenCalledWith("Quality must be between 1 and 100")
+    expect(spinner.fail).toHaveBeenCalledWith("Quality must be an integer between 1 and 100")
   })
 
   it("exits when quality > 100", async () => {
@@ -66,7 +66,23 @@ describe("main() — validation", () => {
     mockStat.mockResolvedValue(makeStatResult(false))
     await main()
     expect(mockExit).toHaveBeenCalledWith(1)
-    expect(spinner.fail).toHaveBeenCalledWith("Quality must be between 1 and 100")
+    expect(spinner.fail).toHaveBeenCalledWith("Quality must be an integer between 1 and 100")
+  })
+
+  it("exits when quality is non-numeric", async () => {
+    setArgv(["-s", "/img.png", "-q", "abc"])
+    mockStat.mockResolvedValue(makeStatResult(false))
+    await main()
+    expect(mockExit).toHaveBeenCalledWith(1)
+    expect(spinner.fail).toHaveBeenCalledWith("Quality must be an integer between 1 and 100")
+  })
+
+  it("exits when quality is a float", async () => {
+    setArgv(["-s", "/img.png", "-q", "80.5"])
+    mockStat.mockResolvedValue(makeStatResult(false))
+    await main()
+    expect(mockExit).toHaveBeenCalledWith(1)
+    expect(spinner.fail).toHaveBeenCalledWith("Quality must be an integer between 1 and 100")
   })
 
   it("exits when width < 1", async () => {
@@ -74,7 +90,15 @@ describe("main() — validation", () => {
     mockStat.mockResolvedValue(makeStatResult(false))
     await main()
     expect(mockExit).toHaveBeenCalledWith(1)
-    expect(spinner.fail).toHaveBeenCalledWith("Width must be a positive number")
+    expect(spinner.fail).toHaveBeenCalledWith("Width must be a positive integer")
+  })
+
+  it("exits when width is non-numeric", async () => {
+    setArgv(["-s", "/img.png", "-w", "xyz"])
+    mockStat.mockResolvedValue(makeStatResult(false))
+    await main()
+    expect(mockExit).toHaveBeenCalledWith(1)
+    expect(spinner.fail).toHaveBeenCalledWith("Width must be a positive integer")
   })
 })
 

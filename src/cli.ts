@@ -41,15 +41,15 @@ export async function main() {
     }
 
     const stats = await fs.stat(sourcePath)
-    const quality = parseInt(options.quality)
-    const width = parseInt(options.width)
+    const quality = Number(options.quality)
+    const width = Number(options.width)
 
-    if (quality < 1 || quality > 100) {
-      spinner.fail("Quality must be between 1 and 100")
+    if (!Number.isInteger(quality) || quality < 1 || quality > 100) {
+      spinner.fail("Quality must be an integer between 1 and 100")
       process.exit(1)
     }
-    if (width < 1) {
-      spinner.fail("Width must be a positive number")
+    if (!Number.isInteger(width) || width < 1) {
+      spinner.fail("Width must be a positive integer")
       process.exit(1)
     }
 

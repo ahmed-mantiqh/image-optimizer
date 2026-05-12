@@ -2,13 +2,14 @@ import fs from "fs/promises"
 import path from "path"
 import JSZip from "jszip"
 import chalk from "chalk"
-import { isSupportedImage } from "./helpers.js"
 import { optimizeBuffer } from "./optimizer.js"
+import { OPTIMIZABLE_EXTENSIONS } from "./constants.js"
+import type { OptimizerConfig } from "./optimizer.js"
 
 export async function processDirectory(
   source: string,
   destination: string,
-  config: any,
+  config: OptimizerConfig,
 ): Promise<number> {
   if (source === destination) {
     destination += "-1"
@@ -19,11 +20,12 @@ export async function processDirectory(
 
   const dirEntries = entries.filter((e) => e.isDirectory())
   const imageEntries = entries.filter(
-    (e) => e.isFile() && isSupportedImage(e.name) && path.extname(e.name).toLowerCase() !== ".svg",
+    (e) =>
+      e.isFile() &&
+      OPTIMIZABLE_EXTENSIONS.has(path.extname(e.name).toLowerCase()),
   )
   const nonImageEntries = entries.filter(
-    (e) =>
-      e.isFile() && (!isSupportedImage(e.name) || path.extname(e.name).toLowerCase() === ".svg"),
+    (e) => e.isFile() && !OPTIMIZABLE_EXTENSIONS.has(path.extname(e.name).toLowerCase()),
   )
 
   for (const entry of dirEntries) {
@@ -54,11 +56,11 @@ export async function processDirectory(
         } catch (error: any) {
           console.error(chalk.red(`Failed to optimize ${entry.name}: ${error.message}`))
           await fs.copyFile(srcPath, destPath)
-          return 1
+          return 0
         }
       }),
     )
-    processedCount += results.length
+    processedCount += results.reduce((sum: number, r) => sum + r, 0)
   }
 
   await Promise.all(
@@ -70,18 +72,22 @@ export async function processDirectory(
   return processedCount
 }
 
-export async function processZip(source: string, destination: string, config: any) {
+export async function processZip(
+  source: string,
+  destination: string,
+  config: OptimizerConfig,
+) {
   const zipData = await fs.readFile(source)
   const zip = await JSZip.loadAsync(zipData)
   const newZip = new JSZip()
 
   const fileNames = Object.keys(zip.files)
-  const imageFiles = fileNames.filter(
-    (f) => !zip.files[f].dir && isSupportedImage(f) && path.extname(f).toLowerCase() !== ".svg",
-  )
-  const totalImages = imageFiles.length
-  let imageIndex = 0
+  const imageEntries: { name: string; content: Buffer }[] = []
+  const totalImages = fileNames.filter(
+    (f) => !zip.files[f].dir && OPTIMIZABLE_EXTENSIONS.has(path.extname(f).toLowerCase()),
+  ).length
 
+  // First pass: collect all entries, process non-image entries immediately
   for (const fileName of fileNames) {
     const file = zip.files[fileName]
     if (file.dir) {
@@ -89,23 +95,41 @@ export async function processZip(source: string, destination: string, config: an
       continue
     }
 
-    const content = await file.async("nodebuffer")
     const ext = path.extname(fileName).toLowerCase()
+    const content = await file.async("nodebuffer")
 
-    if (ext === ".svg") {
-      newZip.file(fileName, content)
-    } else if (isSupportedImage(fileName)) {
-      imageIndex++
-      config.spinner.text = `Optimizing in zip [${imageIndex}/${totalImages}]: ${fileName}`
-      try {
-        const optimized = await optimizeBuffer(content, path.extname(fileName), config)
-        newZip.file(fileName, optimized)
-      } catch (error: any) {
-        console.error(chalk.red(`Failed to optimize ${fileName}: ${error.message}`))
-        newZip.file(fileName, content)
-      }
+    if (OPTIMIZABLE_EXTENSIONS.has(ext)) {
+      imageEntries.push({ name: fileName, content })
     } else {
       newZip.file(fileName, content)
+    }
+  }
+
+  // Batch process image entries
+  const batchSize = 5
+  for (let i = 0; i < imageEntries.length; i += batchSize) {
+    const batch = imageEntries.slice(i, i + batchSize)
+    const results = await Promise.all(
+      batch.map(async (entry, j) => {
+        const num = i + j + 1
+        config.spinner.text = `Optimizing in zip [${num}/${totalImages}]: ${entry.name}`
+        try {
+          const optimized = await optimizeBuffer(
+            entry.content,
+            path.extname(entry.name),
+            config,
+          )
+          return { name: entry.name, buffer: optimized }
+        } catch (error: any) {
+          console.error(
+            chalk.red(`Failed to optimize ${entry.name}: ${error.message}`),
+          )
+          return { name: entry.name, buffer: entry.content }
+        }
+      }),
+    )
+    for (const { name, buffer } of results) {
+      newZip.file(name, buffer)
     }
   }
 
@@ -118,7 +142,11 @@ export async function processZip(source: string, destination: string, config: an
   await fs.writeFile(destination, outputBuffer)
 }
 
-export async function processSingleFile(source: string, destination: string, config: any) {
+export async function processSingleFile(
+  source: string,
+  destination: string,
+  config: OptimizerConfig,
+) {
   const buffer = await fs.readFile(source)
   const optimized = await optimizeBuffer(buffer, path.extname(source), config)
   await fs.writeFile(destination, optimized)

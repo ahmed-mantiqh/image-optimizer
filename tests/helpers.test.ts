@@ -6,6 +6,7 @@ describe("isSupportedImage", () => {
   it("returns true for supported extensions", () => {
     expect(isSupportedImage("photo.jpg")).toBe(true)
     expect(isSupportedImage("photo.jpeg")).toBe(true)
+    expect(isSupportedImage("photo.jfif")).toBe(true)
     expect(isSupportedImage("photo.png")).toBe(true)
     expect(isSupportedImage("photo.webp")).toBe(true)
     expect(isSupportedImage("photo.gif")).toBe(true)
@@ -23,6 +24,11 @@ describe("isSupportedImage", () => {
     expect(isSupportedImage("file.txt")).toBe(false)
     expect(isSupportedImage("file.pdf")).toBe(false)
     expect(isSupportedImage("file")).toBe(false)
+  })
+
+  it("handles multi-dot filenames", () => {
+    expect(isSupportedImage("archive.tar.gz")).toBe(false)
+    expect(isSupportedImage("image.optimized.png")).toBe(true)
   })
 })
 
