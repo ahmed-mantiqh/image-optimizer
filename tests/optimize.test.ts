@@ -89,7 +89,9 @@ describe("optimizeBuffer", () => {
   })
 
   it("returns real SVG content unchanged", async () => {
-    const svgBuffer = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>')
+    const svgBuffer = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>',
+    )
     const result = await optimizeBuffer(svgBuffer, ".svg", config)
     expect(result).toBe(svgBuffer)
   })

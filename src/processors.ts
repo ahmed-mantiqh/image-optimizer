@@ -20,9 +20,7 @@ export async function processDirectory(
 
   const dirEntries = entries.filter((e) => e.isDirectory())
   const imageEntries = entries.filter(
-    (e) =>
-      e.isFile() &&
-      OPTIMIZABLE_EXTENSIONS.has(path.extname(e.name).toLowerCase()),
+    (e) => e.isFile() && OPTIMIZABLE_EXTENSIONS.has(path.extname(e.name).toLowerCase()),
   )
   const nonImageEntries = entries.filter(
     (e) => e.isFile() && !OPTIMIZABLE_EXTENSIONS.has(path.extname(e.name).toLowerCase()),
@@ -72,11 +70,7 @@ export async function processDirectory(
   return processedCount
 }
 
-export async function processZip(
-  source: string,
-  destination: string,
-  config: OptimizerConfig,
-) {
+export async function processZip(source: string, destination: string, config: OptimizerConfig) {
   const zipData = await fs.readFile(source)
   const zip = await JSZip.loadAsync(zipData)
   const newZip = new JSZip()
@@ -114,16 +108,10 @@ export async function processZip(
         const num = i + j + 1
         config.spinner.text = `Optimizing in zip [${num}/${totalImages}]: ${entry.name}`
         try {
-          const optimized = await optimizeBuffer(
-            entry.content,
-            path.extname(entry.name),
-            config,
-          )
+          const optimized = await optimizeBuffer(entry.content, path.extname(entry.name), config)
           return { name: entry.name, buffer: optimized }
         } catch (error: any) {
-          console.error(
-            chalk.red(`Failed to optimize ${entry.name}: ${error.message}`),
-          )
+          console.error(chalk.red(`Failed to optimize ${entry.name}: ${error.message}`))
           return { name: entry.name, buffer: entry.content }
         }
       }),
