@@ -1,7 +1,22 @@
 import sharp from "sharp"
+import { isSvgExtension } from "./constants.js"
 
-export async function optimizeBuffer(buffer: Buffer, ext: string, config: any): Promise<Buffer> {
+export interface OptimizerConfig {
+  quality: number
+  width: number
+  spinner: { text: string }
+}
+
+export async function optimizeBuffer(
+  buffer: Buffer,
+  ext: string,
+  config: OptimizerConfig,
+): Promise<Buffer> {
   const extension = ext.toLowerCase()
+
+  if (isSvgExtension(extension)) {
+    return buffer
+  }
 
   try {
     let pipeline = sharp(buffer, { animated: true })
@@ -12,10 +27,9 @@ export async function optimizeBuffer(buffer: Buffer, ext: string, config: any): 
     }
 
     switch (extension) {
-      case ".svg":
-        return buffer
       case ".jpeg":
       case ".jpg":
+      case ".jfif":
         pipeline = pipeline.jpeg({ quality: config.quality, mozjpeg: true })
         break
       case ".png":
@@ -29,7 +43,9 @@ export async function optimizeBuffer(buffer: Buffer, ext: string, config: any): 
         pipeline = pipeline.webp({ quality: config.quality })
         break
       case ".gif":
-        pipeline = pipeline.gif({ colors: Math.round((config.quality / 100) * 256) })
+        pipeline = pipeline.gif({
+          colors: Math.max(2, Math.round((config.quality / 100) * 256)),
+        })
         break
       case ".avif":
         pipeline = pipeline.avif({ quality: config.quality })
@@ -37,6 +53,8 @@ export async function optimizeBuffer(buffer: Buffer, ext: string, config: any): 
       case ".tiff":
         pipeline = pipeline.tiff({ quality: config.quality })
         break
+      default:
+        return buffer
     }
 
     const outputBuffer = await pipeline.toBuffer()
